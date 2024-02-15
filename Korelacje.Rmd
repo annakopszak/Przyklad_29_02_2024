@@ -1,0 +1,84 @@
+---
+title: "Korelacje"
+author: "JakubWronowicz"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Zacznijmy od importu danych otrzymanych w poprzedniej części
+
+Musimy zimportować wszyskie 8 ramek danych.
+
+```{r}
+library(readxl)
+library(psych)
+library(vcd)
+library(dplyr)
+library(ggplot2)
+library("ggcorrplot")
+```
+
+```{r}
+for (i in 1:8){
+  Sciezka = paste("./Dane/df_", as.character(i), ".csv", sep = "")
+  assign(paste("df", as.character(i), sep = '_'), read.csv(Sciezka))
+  }
+```
+
+
+# Korelacje
+
+Dla każdej grupy chorych stworzymy dwie tabele korelacji: jedną opartą o korelację Spearmana oraz drugą dla korelacji Kendala.
+
+```{r}
+
+Continuos_names <- c("wiek", "białkomocz..g.l.", "kreatynina.w.moczu.....dl.", "białkomocz.na.dobę", "białko.w.surowicy", 
+                        "albuminy.w.surowicy", "kreatynina.w.surowicy", "czas.trwania.choroby.podstawowej..w.dniach.",
+                        "cholesterol.całkowity", "LDL.cholesterol", "trójglicerydy", "ACE.II.Ab", "ETAR", "C3aR.Ab", "C5aR.Ab", "CXCR3")
+
+Continuos_opisy <- list("Wiek", "Białkomocz", "Kreatynina w moczu", "Białkomocz na dobę", "Białko całkowite w surowicy",
+                        "Albuminy w surowicy", "Kreatynina w surowicy", "Czas twania choroby", "Cholesteror całkowity", "LDL cholesteror",
+                        "trójglicerydy", "ACEII", "ETAR", "C3aR", "C5aR", "CXCR3")
+
+Zmienne_do_korelacji_nazwy <- list("ACEII", "ETAR", "C3aR", "C5aR", "CXCR3")
+Zmienne_do_korelacji <- list("ACE.II.Ab", "ETAR", "C3aR.Ab", "C5aR.Ab", "CXCR3")
+
+nazwy <- list("df_1", "df_2", "df_3", "df_4", "df_5", "df_6", "df_7", "df_8")
+
+```
+
+## Korelacja Spearmana
+
+
+```{r}
+
+for (j in list("spearman", "kendal")){
+  counter <- 0
+  for (i in list(df_1, df_2, df_3, df_4, df_5)){
+    counter <- counter + 1
+    corr_matrix <- cor(i[,Continuos_names], use = "pairwise.complete.obs", method = j)
+    p.mat <- cor_pmat(corr_matrix)
+
+    Nazwa <- paste("Korelacja_", j, ".png", sep = "")
+    Nazwa1 <- paste("Korelacja_p-value_", j, ".png", sep = "")
+    Sciezka <- paste("./", counter, sep = "")
+  
+    ggcorrplot(corr_matrix, lab = TRUE, lab_size = 8, tl.cex = 14)
+    ggsave(Nazwa, path = Sciezka, width = 20, height = 20, bg = "White")
+  
+    ##ggcorrplot(corr_matrix, p.mat = p.mat)
+    ##ggsave(Nazwa1, path = Sciezka, width = 20, height = 20, bg = "White")  
+    ## te dwie rzeczy nie działają dla 5... dla reszty są policzone i zapisane
+  }
+}
+```
+
+
+
+
+
+

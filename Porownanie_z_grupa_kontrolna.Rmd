@@ -1,0 +1,237 @@
+---
+title: "Porownanie_z_grupa_kontrolna"
+author: "JakubWronowicz"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Zacznijmy od importu danych otrzymanych w poprzedniej części
+
+Musimy zimportować wszyskie 8 ramek danych.
+
+```{r}
+library(readxl)
+library(psych)
+library(vcd)
+library(dplyr)
+library(ggplot2)
+library("ggcorrplot")
+library(tidyverse)
+library(ggpubr)
+library(rstatix)
+library(ggstatsplot)
+```
+
+```{r}
+for (i in 1:8){
+  Sciezka = paste("./Dane/df_", as.character(i), ".csv", sep = "")
+  assign(paste("df", as.character(i), sep = '_'), read.csv(Sciezka))
+  }
+```
+
+# Porównanie poszczególnych zmiennych pomiędzy konretnymi grupami chorych, a grupą kontrolną (6)
+
+Ta część analizy jest związana jest z porównaniem następujących zmiennych pomniędzy grupami, a grupą kontrolną: płeć, wiek oraz kreatynina w surowicy. Dla płci skorzystamy z testu chi-kwadrat lub dokładnego testu Fishera w przypadku porównań między konretnymi grupami. Dla wieku oraz kreatyniny w surowicy skorzystamy natomiast z testu Kruskala - Wallisa wraz z testem post-hoc Dunna wraz z poprawką Bonferroniego.
+
+## Porównanie dla płci
+
+Zacznijmy od sprawdzenia czy istnieją różnice pomiędzy grupami poprzez zastosowania test chi-kwadrat dla wszystkich grup łącznie:
+
+```{r}
+
+counter <- 1
+for (i in list(df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8)){
+  assign(paste("M", as.character(counter), "1", sep = ""), sum(i$płeć))
+  assign(paste("M", as.character(counter), "2", sep = ""), nrow(i) - sum(i$płeć))
+  counter <- counter + 1
+}
+
+```
+
+```{r}
+
+M <- matrix(c(M11, M21, M31, M41, M51, M61, M71, M81, M12, M22, M32, M42, M52, M62, M72, M82 ), 8,2)
+colnames(M) <- c("Płec = 1", "Płec = 0")
+rownames(M) <- c("1", "2", "3", "4", "5", "6", "7", "8")
+M
+
+z <- chisq.test(M, correct = TRUE)
+z
+```
+
+Wynik testu wskazuje na brak istotnie statystycznych różnic pomiędzy grupami. Jednakże ze względu na niezbyt duże liczności grup wynik ten może nie być do końca wiarygodny zwłaszcza, że wynik znajduje się blisko wartości granicznej alpha. Sprawdźmy jednak czy istnieją różnice pomiędzy poszczególnymi grupami, a grupą kontrolną.
+
+```{r}
+##  To jest gdby autor chciał jednak porównań każdy z każdym, a nie tylko z grupą kontrolną
+
+##  M1 <- combn(c(M11, M21, M31, M41, M51, M61, M71, M81), 2)  ### Jakby potrzeba byłoby policzyć różnice pomiędzy wszystkimi
+##  M2 <- combn(c(M12, M22, M32, M42, M52, M62, M72, M82), 2)
+
+```
+
+Testy chi-kwadrat + poprawka Yatesa, chi-kwadrat bez poprawki, dokładny test Fishera. Jeżeli wartości oczekiwane są powyżej 10 to korzystamy z chi-kwadrat. Jeżeli dowolna wartość oczekiwana jest z przedziału <5, 10> to dodajemy poprawkę Yates'a. Jeżeli dowolna wartość oczekiwana jest poniżej 5 to korzystamy z testu Fishera.
+
+```{r}
+counter <- 1
+for (i in list(df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8)){
+  
+  if (counter != 6) {
+    M <- matrix(c(assign(paste("M", as.character(counter), "1", sep = ""), sum(i$płeć)), M61,
+                assign(paste("M", as.character(counter), "2", sep = ""), nrow(i) - sum(i$płeć)), M62), 2, 2)
+    colnames(M) <- c("Płec = 1", "Płec = 0")
+    rownames(M) <- c(counter, "6")
+  
+    cat("=====================================================================\n")
+    
+    cat("Macierz kontygencji: \n\n")
+    print(M)
+    cat("\nWartości oczekiwane: \n\n")
+    print(chisq.test(M)$expected)
+    
+    cat("\nTesty statystyczne: \n\n")
+    
+    print(chisq.test(M, correct = TRUE))
+    print(chisq.test(M, correct = FALSE))
+    print(fisher.test(M))
+    
+  }
+  
+  counter <- counter + 1
+}
+```
+
+Ze względu na porównania wielokrotne musimy skorzystać z poprawki regulującej błąd pierwszego rodzaju. Skorzystajmy z poprawki Bonferroniego. W ten sposób alpha = 0.05/7 = 0.00714. W ten sposób otrzymujemy, że żadna grupa nie różni się w sposób istotny statystycznie od grupy testowej.
+
+## Porównanie dla wieku
+
+Najpierw sporządźmy ogólny model sprawdzający istnienie różnic pomiędzy grupami. W tym celu skorzystamy z testu Kruskal'a - Wallis'a.
+
+```{r}
+
+df <- rbind(df_1, df_2, df_3, df_4, df_5, df_6, df_7, df_8)
+kruskal.test(df$wiek ~ df$grupa.chorych )
+
+```
+
+Widzimy zatem, że model wykazał istnienie różnic pomiędzy grupami. Teraz możemy skorzystać z testu post-hoc - test Dunn'a, aby sprawdzić istnienie różnic pomiędzy poszczególnymi parami grup. Test ten automatycznie uwzględnia poprawkę na testowanie w postaci poprawki Bonferroniego. Wyniki będą policzone dla wszystkich możliwych par i tak samo zobrazowane. Dodatkowo zostanie osobno policzona poprawka dla przypadku porównań jedynie z grupą kontrolną.
+
+```{r}
+
+df_por <- dunn_test(df, wiek ~ grupa.chorych , p.adjust.method = "bonferroni")
+df_por
+
+```
+
+```{r}
+
+ggbetweenstats(
+  data = df,
+  x = grupa.chorych,
+  y = wiek,
+  type = "nonparametric", # ANOVA or Kruskal-Wallis
+  plot.type = "box=and-whiskers",
+  p.adjust.method = "bonferroni",
+  pairwise.comparisons = TRUE,
+  pairwise.display = "significant",
+  centrality.plotting = FALSE,
+  bf.message = FALSE
+)
+
+```
+
+Na powyższym wyrkesie zostały pokazane wszystkie wyniki, które wyszły statystycznie istotne. Natomiast gdy weźmiemy pod uwagę jedynie porównania z grupą kontrolną to otrzymamy:
+
+```{r}
+
+df_por_Kontr <- df_por[df_por$group2 == "6" | df_por$group1 == "6", ]
+df_por_Kontr
+
+```
+
+```{r}
+
+Res_kontr <- data.frame(df_por_Kontr$group1, df_por_Kontr$group2, df_por_Kontr$p, df_por_Kontr$p*7, df_por_Kontr$p*7 < 0.05)
+colnames(Res_kontr) <- c("Grupa 1", "Grupa 2", "p-value", "adjusted p-value", "significant")
+Res_kontr
+
+```
+
+Widzimy zatem, że jedynie grupa 8 różni się w sposób istotny od grupy 6.
+
+```{r}
+boxplot(wiek ~ grupa.chorych,
+        data = df,
+        col = "orange")
+
+```
+
+
+## Porównanie dla kreatyniny w surowicy
+
+Najpierw sporządźmy ogólny model dla porównań między grupami dla kreatyniny w surowicy. W tym celu skorzystamy z testu Kruskal'a - Wallis'a.
+
+```{r}
+
+kruskal.test(df$kreatynina.w.surowicy ~ df$grupa.chorych )
+
+```
+
+Widzimy zatem, że model wykazał istnienie różnic pomiędzy grupami. Teraz możemy skorzystać z testu post-hoc - test Dunn'a, aby sprawdzić istnienie różnic pomiędzy poszczególnymi parami grup. Test ten automatycznie uwzględnia poprawkę na testowanie w postaci poprawki Bonferroniego. Wyniki będą policzone dla wszystkich możliwych par i tak samo zobrazowane. Dodatkowo zostanie osobno policzona poprawka dla przypadku porównań jedynie z grupą kontrolną.
+
+```{r}
+
+df_por <- dunn_test(df, kreatynina.w.surowicy ~ grupa.chorych , p.adjust.method = "bonferroni")
+df_por
+
+```
+
+
+```{r}
+
+ggbetweenstats(
+  data = df,
+  x = grupa.chorych,
+  y = kreatynina.w.surowicy,
+  type = "nonparametric", # ANOVA or Kruskal-Wallis
+  plot.type = "box=and-whiskers",
+  p.adjust.method = "bonferroni",
+  pairwise.comparisons = TRUE,
+  pairwise.display = "significant",
+  centrality.plotting = FALSE,
+  bf.message = FALSE
+)
+
+```
+
+Na powyższym wyrkesie zostały pokazane wszystkie wyniki, które wyszły statystycznie istotne. Natomiast gdy weźmiemy pod uwagę jedynie porównania z grupą kontrolną to otrzymamy:
+
+```{r}
+
+df_por_Kontr <- df_por[df_por$group2 == "6" | df_por$group1 == "6", ]
+df_por_Kontr
+
+```
+
+```{r}
+
+Res_kontr <- data.frame(df_por_Kontr$group1, df_por_Kontr$group2, df_por_Kontr$p, df_por_Kontr$p*7, df_por_Kontr$p*7 < 0.05)
+colnames(Res_kontr) <- c("Grupa 1", "Grupa 2", "p-value", "adjusted p-value", "significant")
+Res_kontr
+
+```
+
+Widzimy zatem, że jedynie grupa 8 różni się w sposób istotny od grupy 6.
+
+```{r}
+boxplot(kreatynina.w.surowicy ~ grupa.chorych,
+        data = df,
+        col = "orange")
+
+```
+
+
+
